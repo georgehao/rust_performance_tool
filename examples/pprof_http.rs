@@ -4,8 +4,13 @@
 //! to provide profiling endpoints that can be accessed via HTTP requests.
 //!
 //! Run this with:
-//! ```
+//! ```bash
+//! # IMPORTANT: Must set _RJEM_MALLOC_CONF for jemalloc profiling to work!
+//! _RJEM_MALLOC_CONF=prof:true,prof_active:true,lg_prof_sample:19 \
 //! cargo run --example pprof_http --release
+//!
+//! # Or use the convenient script:
+//! ./run_with_profiling.sh
 //! ```
 //!
 //! Available HTTP endpoints:
@@ -30,7 +35,12 @@
 //! curl -X POST http://localhost:8080/profile/memory > heap_profile.pb
 //! go tool pprof -http=:9001 heap_profile.pb
 //!
-//! # To enable jemalloc profiling with proper stack traces, run with:
+//! # IMPORTANT: Memory profiling requires _RJEM_MALLOC_CONF environment variable!
+//! # The malloc_conf in code is NOT enough - you MUST set the env var:
+//! _RJEM_MALLOC_CONF=prof:true,prof_active:true,lg_prof_sample:19 \
+//! cargo run --example pprof_http --release
+//!
+//! # For more detailed sampling (every allocation):
 //! _RJEM_MALLOC_CONF=prof:true,lg_prof_sample:0,prof_final:false \
 //! RUSTFLAGS="-C force-frame-pointers=yes" \
 //! cargo run --example pprof_http --release
@@ -50,10 +60,13 @@ use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
-// Use jemalloc as the global allocator (not on MSVC/Windows)
-#[cfg(all(not(target_env = "msvc"), not(target_os = "windows")))]
+#[cfg(not(target_env = "msvc"))]
 #[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+#[allow(non_upper_case_globals)]
+#[export_name = "malloc_conf"]
+pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
 
 /// Shared application state
 struct AppState {
@@ -229,7 +242,9 @@ async fn handle_status(state: Arc<AppState>) -> Response<Full<Bytes>> {
     </ol>
 </body>
 </html>"#,
-        *count, pool.len(), total_mb
+        *count,
+        pool.len(),
+        total_mb
     );
 
     Response::builder()
@@ -308,8 +323,11 @@ async fn handle_allocate(state: Arc<AppState>, query: Option<&str>) -> Response<
 
     let total_allocated_mb = pool.iter().map(|v| v.len()).sum::<usize>() as f64 / 1024.0 / 1024.0;
 
-    println!("Memory allocation completed. Total: {:.2} MB across {} pools",
-             total_allocated_mb, pool.len());
+    println!(
+        "Memory allocation completed. Total: {:.2} MB across {} pools",
+        total_allocated_mb,
+        pool.len()
+    );
 
     let body = format!(
         "Allocated {} MB successfully!\nTotal allocated: {:.2} MB across {} memory pools\n\nTry getting a heap profile:\ncurl -X POST http://localhost:8080/profile/memory > heap_profile.pb\ngo tool pprof -http=:9001 heap_profile.pb\n",
@@ -467,7 +485,10 @@ async fn handle_memory_profile(state: Arc<AppState>) -> Response<Full<Bytes>> {
     let pool_count = pool.len();
     drop(pool);
 
-    println!("Current state: {:.2} MB allocated across {} pools", existing_mb, pool_count);
+    println!(
+        "Current state: {:.2} MB allocated across {} pools",
+        existing_mb, pool_count
+    );
 
     // Create temporary allocations to make the profile more interesting
     // These will show up with different stack traces than the persistent allocations
@@ -480,7 +501,8 @@ async fn handle_memory_profile(state: Arc<AppState>) -> Response<Full<Bytes>> {
     let result = prof_ctl_guard.dump_pprof();
 
     // Keep temporary allocations alive during dump
-    let temp_size = temp_allocations.iter().map(|v| v.len()).sum::<usize>() as f64 / 1024.0 / 1024.0;
+    let temp_size =
+        temp_allocations.iter().map(|v| v.len()).sum::<usize>() as f64 / 1024.0 / 1024.0;
     println!("Temporary allocations: {:.2} MB", temp_size);
 
     drop(temp_allocations);
@@ -502,7 +524,10 @@ async fn handle_memory_profile(state: Arc<AppState>) -> Response<Full<Bytes>> {
                 pprof_data.len()
             );
             println!("Profile includes:");
-            println!("  - Persistent allocations: {:.2} MB across {} pools", existing_mb, pool_count);
+            println!(
+                "  - Persistent allocations: {:.2} MB across {} pools",
+                existing_mb, pool_count
+            );
             println!("  - Temporary demo allocations: {:.2} MB", temp_size);
 
             Response::builder()
@@ -592,9 +617,7 @@ async fn create_demo_allocations() -> Vec<Vec<u8>> {
     // Pattern 4: Async task allocations
     let mut handles = Vec::new();
     for i in 0..4 {
-        let handle = tokio::spawn(async move {
-            allocate_from_task(i)
-        });
+        let handle = tokio::spawn(async move { allocate_from_task(i) });
         handles.push(handle);
     }
 
