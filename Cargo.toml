@@ -1,0 +1,88 @@
+[package]
+name = "tokio-console-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.43", features = ["full", "tracing"] }
+console-subscriber = "0.4"
+tracing = "0.1"
+libc = "0.2"
+hyper = { version = "1.5", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
+bytes = "1.0"
+prost = "0.13"
+
+[target.'cfg(all(not(target_env = "msvc"), not(target_os = "windows")))'.dependencies]
+# 使用 tikv-jemallocator 作为内存分配器，并启用性能分析功能
+tikv-jemallocator = { version = "0.6.1", features = ["profiling"] }
+# 用于生成与 pprof 兼容的内存剖析数据
+jemalloc_pprof = "0.8.1"
+# 用于生成 CPU 性能剖析数据和火焰图
+pprof = { version = "0.15", features = ["flamegraph", "protobuf-codec"] }
+
+[[example]]
+name = "self_wakes"
+path = "examples/self_wakes.rs"
+
+[[example]]
+name = "never_yielded"
+path = "examples/never_yielded.rs"
+
+[[example]]
+name = "bad_blocking"
+path = "examples/bad_blocking.rs"
+
+[[example]]
+name = "lost_waker"
+path = "examples/lost_waker.rs"
+
+[[example]]
+name = "hanging_task"
+path = "examples/hanging_task.rs"
+
+[[example]]
+name = "long_running"
+path = "examples/long_running.rs"
+
+[[example]]
+name = "healthy"
+path = "examples/healthy.rs"
+
+[[example]]
+name = "mixed_issues"
+path = "examples/mixed_issues.rs"
+
+[[example]]
+name = "large_future"
+path = "examples/large_future.rs"
+
+[[example]]
+name = "auto_boxed_future"
+path = "examples/auto_boxed_future.rs"
+
+[[example]]
+name = "stack_overflow"
+path = "examples/stack_overflow.rs"
+
+[[example]]
+name = "stack_overflow_explained"
+path = "examples/stack_overflow_explained.rs"
+
+[[example]]
+name = "pprof_http"
+path = "examples/pprof_http.rs"
+
+# Profile configuration for better profiling support
+[profile.release]
+debug = true  # Include debug symbols for better stack traces
+strip = false # Don't strip symbols
+# Force frame pointers for better stack unwinding
+# This is critical for heap profiling with jemalloc
+[profile.release.package."*"]
+opt-level = 3
+
+[profile.dev]
+# Keep frame pointers in dev mode too
+strip = false
