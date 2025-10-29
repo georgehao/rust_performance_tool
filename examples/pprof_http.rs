@@ -64,6 +64,9 @@ use tokio::sync::Mutex;
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
+// NOTE: This malloc_conf works on Linux but NOT reliably on macOS!
+// On macOS, you MUST use the _RJEM_MALLOC_CONF environment variable.
+// Reason: macOS dynamic linker handles exported symbols differently than Linux.
 #[allow(non_upper_case_globals)]
 #[export_name = "malloc_conf"]
 pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
