@@ -67,16 +67,40 @@ fn main() {
             }
         });
 
-        // // ✅ Good task for comparison (victim of starvation)
+        // // ✅ GOOD: Using spawn_blocking for CPU-intensive work
         // tokio::spawn(async {
+        //     println!("[Good Task] Proper handling of blocking operations...");
+
         //     let mut count = 0;
         //     loop {
+        //         // Some async work
         //         tokio::time::sleep(Duration::from_millis(100)).await;
-        //         count += 1;
 
-        //         if count % 20 == 0 {
-        //             println!("\n[Good Task] I'm being STARVED! Should run 10x per second, but...");
-        //         }
+        //         println!("[Good Task] Starting blocking operations...");
+
+        //         // ✅ GOOD: Move blocking work to dedicated thread pool
+        //         tokio::task::spawn_blocking(|| {
+        //             for i in 0..5 {
+        //                 // Blocking CPU work
+        //                 let mut sum = 0u64;
+        //                 for j in 0..200_000_000 {
+        //                     sum = sum.wrapping_add(j);
+        //                 }
+
+        //                 // Blocking I/O
+        //                 std::thread::sleep(Duration::from_millis(500));
+
+        //                 println!("[Good Task] Iteration {} done", i);
+        //             }
+
+        //             println!("[Good Task] All blocking work done");
+        //         })
+        //         .await
+        //         .unwrap();
+
+        //         // Update count AFTER blocking work completes
+        //         count += 1;
+        //         println!("[Good Task] Count: {}", count);
         //     }
         // });
 
